@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Squeek Desk · web3-gems</title>
+<meta name="description" content="Squeek Desk — a community dashboard for the hamster-powered Squeekchain testnet: chain status, Squeek staking stats, and wallet lookups.">
+<style>
+  :root {
+    --bg: #0d0b14; --panel: #171426; --panel2: #1f1b33; --line: #2c2745;
+    --txt: #e8e4f5; --dim: #9a92b8; --acc: #ffb84d; --acc2: #8b5cf6;
+    --ok: #4ade80; --warn: #fbbf24; --err: #f87171;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--txt); font-family: -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.5; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; }
+  header { display: flex; align-items: baseline; gap: 12px; padding: 20px 0 6px; flex-wrap: wrap; }
+  h1 { font-size: 28px; letter-spacing: -0.5px; }
+  h1 .ham { color: var(--acc); }
+  .tag { color: var(--dim); font-size: 13px; }
+  .tag a { color: var(--acc2); text-decoration: none; }
+  .sub { color: var(--dim); font-size: 14px; margin-bottom: 24px; max-width: 640px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 28px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .card .k { color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; }
+  .card .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .card .s { color: var(--dim); font-size: 12px; margin-top: 4px; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .err { color: var(--err); } .acc { color: var(--acc); }
+  section { margin-bottom: 28px; }
+  h2 { font-size: 17px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  h2::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--acc); }
+  .lookup { display: flex; gap: 8px; flex-wrap: wrap; }
+  input[type=text] { flex: 1; min-width: 280px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; color: var(--txt); font-family: monospace; font-size: 13px; }
+  input[type=text]:focus { outline: none; border-color: var(--acc2); }
+  button { background: var(--acc2); border: none; border-radius: 8px; padding: 10px 18px; color: #fff; font-weight: 600; cursor: pointer; font-size: 14px; }
+  button:hover { filter: brightness(1.15); }
+  button:disabled { opacity: 0.5; cursor: wait; }
+  #walletOut { margin-top: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--dim); font-weight: 500; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: none; }
+  .mono { font-family: monospace; font-size: 12px; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+  .pill.live { background: rgba(74,222,128,0.12); color: var(--ok); }
+  .pill.stale { background: rgba(251,191,36,0.12); color: var(--warn); }
+  .foot { color: var(--dim); font-size: 12px; border-top: 1px solid var(--line); padding-top: 16px; }
+  .foot code { color: var(--acc); }
+  .note { color: var(--dim); font-size: 12px; margin-top: 8px; }
+  @media (max-width: 560px) { h1 { font-size: 22px; } .card .v { font-size: 18px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span class="ham">🐹</span> Squeek Desk</h1>
+    <span class="tag">a community dashboard by <a href="https://web3-gems.me">web3-gems</a></span>
+  </header>
+  <p class="sub">Live view of the hamster-powered Squeekchain testnet (Sepolia): chain status, Squeek staking stats, and wallet lookups. All data is read directly from the chain and the public Squeekchain API — no wallet connection required.</p>
+
+  <div class="grid" id="chainGrid">
+    <div class="card"><div class="k">Chain status</div><div class="v" id="cFresh">—</div><div class="s" id="cFreshSub">loading…</div></div>
+    <div class="card"><div class="k">Work units</div><div class="v acc" id="cWork">—</div><div class="s">cumulative hamster work</div></div>
+    <div class="card"><div class="k">Indexed block</div><div class="v" id="cBlock">—</div><div class="s" id="cBlockSub">Sepolia · chain 11155111</div></div>
+    <div class="card"><div class="k">Genesis launch</div><div class="v" id="cLaunch">—</div><div class="s" id="cLaunchSub">whitelist mint</div></div>
+  </div>
+
+  <section>
+    <h2>Squeek staking</h2>
+    <div class="grid">
+      <div class="card"><div class="k">Total SQK staked</div><div class="v acc" id="sTotal">—</div><div class="s">across all stakers</div></div>
+      <div class="card"><div class="k">Staking</div><div class="v" id="sState">—</div><div class="s" id="sStateSub">contract state</div></div>
+      <div class="card"><div class="k">Squeek collection</div><div class="v" id="sSupply">—</div><div class="s">minted on Sepolia</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Wallet lookup</h2>
+    <div class="lookup">
+      <input type="text" id="addrIn" placeholder="0x… wallet address (Sepolia)" spellcheck="false">
+      <button id="lookBtn">Look up</button>
+    </div>
+    <div id="walletOut"></div>
+    <p class="note">Read-only: claimable SQK and Squeek balance are fetched straight from the staking and collection contracts.</p>
+  </section>
+
+  <section>
+    <h2>Genesis leaderboard <span class="tag" id="lbWhen"></span></h2>
+    <table id="lbTable"><thead><tr><th>#</th><th>Member</th><th>Aura</th></tr></thead><tbody></tbody></table>
+    <p class="note">Snapshot of the top genesis members at build time. Live standings live on the official site.</p>
+  </section>
+
+  <footer class="foot">
+    <p>Contracts — staking <code>0x50fd…11ca</code> · collection <code>0xc4c7…856b</code> · chain Sepolia (11155111).</p>
+    <p>Data: <code>api.squeekchain.com</code> + Sepolia RPC. Built as an open dashboard for the Squeekchain community. Testnet coins have no value.</p>
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<script>
+const API = "https://api.squeekchain.com";
+const RPC = "https://ethereum-sepolia-rpc.publicnode.com";
+const STAKING = "0x50fd1780526C3186A0c037c7622203bC4fb611ca";
+const COLLECTION = "0xc4c7982657f00509548f3a3a41db7fa439a6856b";
+const fmt = (n, d = 2) => Number(n).toLocaleString("en-US", { maximumFractionDigits: d });
+const $ = (id) => document.getElementById(id);
+
+/* ---------- chain status ---------- */
+async function loadChain() {
+  try {
+    const [status, core, launch] = await Promise.all([
+      fetch(API + "/v1/status").then(r => r.json()),
+      fetch(API + "/v1/core").then(r => r.json()),
+      fetch(API + "/v1/genesis-launch").then(r => r.json()),
+    ]);
+    const fresh = status.measurement?.freshness === "online";
+    $("cFresh").innerHTML = fresh ? '<span class="pill live">● online</span>' : '<span class="pill stale">● stale</span>';
+    $("cFreshSub").textContent = fresh ? "hamsters running" : "last ping " + (status.measurement?.observedAt || "?").slice(11, 19) + " UTC";
+    $("cWork").textContent = fmt(Number(status.measurement?.cumulativeWorkUnits || 0), 0);
+    $("cBlock").textContent = fmt(Number(core.chain?.indexedThroughBlock || 0), 0);
+    $("cBlockSub").textContent = "safe block " + fmt(Number(core.chain?.safeThroughBlock || 0), 0);
+    const unconfigured = launch.status === "unavailable";
+    $("cLaunch").textContent = unconfigured ? "TBA" : "configured";
+    $("cLaunch").className = "v " + (unconfigured ? "warn" : "ok");
+    $("cLaunchSub").textContent = unconfigured ? (launch.reason || "").replace(/_/g, " ") : "check official site";
+  } catch (e) {
+    $("cFresh").innerHTML = '<span class="err">api error</span>';
+    $("cFreshSub").textContent = String(e).slice(0, 60);
+  }
+}
+
+/* ---------- staking ---------- */
+async function loadStaking() {
+  try {
+    const provider = new ethers.JsonRpcProvider(RPC);
+    const staking = new ethers.Contract(STAKING, [
+      "function totalStaked() view returns (uint256)",
+      "function launchReady() view returns (bool)",
+      "function paused() view returns (bool)",
+    ], provider);
+    const col = new ethers.Contract(COLLECTION, [
+      "function totalSupply() view returns (uint256)",
+      "function name() view returns (string)",
+    ], provider);
+    const [total, ready, paused, supply] = await Promise.all([
+      staking.totalStaked(), staking.launchReady(), staking.paused(), col.totalSupply(),
+    ]);
+    $("sTotal").textContent = fmt(Number(total) / 1e18) + " SQK";
+    $("sState").innerHTML = paused ? '<span class="err">paused</span>' : (ready ? '<span class="ok">live</span>' : '<span class="warn">standby</span>');
+    $("sStateSub").textContent = paused ? "deposits halted" : (ready ? "accepting deposits" : "launch pending");
+    $("sSupply").textContent = fmt(Number(supply), 0);
+  } catch (e) {
+    $("sTotal").innerHTML = '<span class="err">rpc error</span>';
+    $("sStateSub").textContent = String(e).slice(0, 60);
+  }
+}
+
+/* ---------- wallet lookup ---------- */
+async function lookup() {
+  const addr = $("addrIn").value.trim();
+  const out = $("walletOut");
+  if (!ethers.isAddress(addr)) { out.innerHTML = '<p class="note err">Not a valid address.</p>'; return; }
+  $("lookBtn").disabled = true;
+  out.innerHTML = '<p class="note">reading chain…</p>';
+  try {
+    const provider = new ethers.JsonRpcProvider(RPC);
+    const staking = new ethers.Contract(STAKING, [
+      "function claimable(address) view returns (uint256)",
+    ], provider);
+    const col = new ethers.Contract(COLLECTION, [
+      "function balanceOf(address) view returns (uint256)",
+    ], provider);
+    const [claim, bal] = await Promise.all([staking.claimable(addr), col.balanceOf(addr)]);
+    out.innerHTML = `
+      <div class="grid">
+        <div class="card"><div class="k">Claimable SQK</div><div class="v acc">${fmt(Number(claim) / 1e18)}</div><div class="s">unclaimed rewards</div></div>
+        <div class="card"><div class="k">Squeeks held</div><div class="v">${fmt(Number(bal), 0)}</div><div class="s">in wallet (unstaked)</div></div>
+        <div class="card"><div class="k">Address</div><div class="v mono" style="font-size:13px;word-break:break-all">${addr}</div><div class="s"><a href="https://sepolia.etherscan.io/address/${addr}" style="color:var(--acc2)">view on explorer ↗</a></div></div>
+      </div>`;
+  } catch (e) {
+    out.innerHTML = '<p class="note err">Lookup failed: ' + String(e).slice(0, 100) + '</p>';
+  }
+  $("lookBtn").disabled = false;
+}
+$("lookBtn").addEventListener("click", lookup);
+$("addrIn").addEventListener("keydown", (e) => { if (e.key === "Enter") lookup(); });
+
+/* ---------- leaderboard snapshot (static, embedded at build) ---------- */
+const LB = [{"rank": 1, "user": "mfBRAT_eth", "aura": 5221}, {"rank": 2, "user": "OlricOnlyfornft", "aura": 5098}, {"rank": 3, "user": "Mojito_cx", "aura": 5071}, {"rank": 4, "user": "lowonfiats", "aura": 4898}, {"rank": 5, "user": "Eli_802", "aura": 4571}, {"rank": 6, "user": "flashrekt", "aura": 4415}, {"rank": 7, "user": "v1dox_eth", "aura": 4395}, {"rank": 8, "user": "Uncle0_0_0", "aura": 4370}, {"rank": 9, "user": "xamiguo", "aura": 4370}, {"rank": 10, "user": "cuongisreal_", "aura": 4270}, {"rank": 11, "user": "mrjackvnn", "aura": 4270}, {"rank": 12, "user": "HIB_BTC", "aura": 4170}, {"rank": 13, "user": "0x_xifeng", "aura": 3919}, {"rank": 14, "user": "0xmeto_", "aura": 3916}, {"rank": 15, "user": "charlieoscar002", "aura": 3770}, {"rank": 16, "user": "0xBadKoi", "aura": 3770}, {"rank": 17, "user": "yujuhao", "aura": 3770}, {"rank": 18, "user": "lovecity0088", "aura": 3770}, {"rank": 19, "user": "?", "aura": 3770}, {"rank": 20, "user": "gaofei52100", "aura": 3715}].map(r => ({...r, when: "2026-11-07 03:25 UTC"}));
+(function () {
+  const tb = document.querySelector("#lbTable tbody");
+  if (!LB.length) { $("lbWhen").textContent = "(snapshot unavailable)"; return; }
+  $("lbWhen").textContent = "· " + (LB[0].when || "");
+  for (const r of LB.slice(0, 20)) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${r.rank}</td><td>@${r.user}</td><td class="acc">${r.aura}</td>`;
+    tb.append(tr);
+  }
+})();
+
+loadChain();
+loadStaking();
+</script>
+</body>
+</html>
